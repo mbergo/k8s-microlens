@@ -1,6 +1,6 @@
 module github.com/mbergo/k8s-microlens
 
-go 1.23.1
+go 1.23
 
 require (
 	k8s.io/api v0.31.2
