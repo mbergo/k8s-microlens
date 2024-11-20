@@ -14,13 +14,16 @@ type ResourceProcessor struct {
 	clientset *kubernetes.Clientset
 	ctx       context.Context
 	formatter *Formatter
+	metrics   *ResourceMetrics
 }
 
 func NewResourceProcessor(clientset *kubernetes.Clientset, ctx context.Context) *ResourceProcessor {
+	formatter := NewFormatter()
 	return &ResourceProcessor{
 		clientset: clientset,
 		ctx:       ctx,
-		formatter: NewFormatter(),
+		formatter: formatter,
+		metrics:   NewResourceMetrics(clientset, formatter),
 	}
 }
 
@@ -283,6 +286,11 @@ func (rp *ResourceProcessor) ProcessNamespace(namespace string) error {
 	rp.formatter.PrintHeader(fmt.Sprintf("Analyzing namespace: %s", namespace))
 	rp.formatter.PrintLine()
 
+	// Show resource utilization first
+	if err := rp.metrics.ShowResourceUtilization(namespace); err != nil {
+		fmt.Printf("Warning: Could not fetch resource utilization: %v\n", err)
+	}
+
 	if err := rp.ShowResourceRelationships(namespace); err != nil {
 		return err
 	}
@@ -307,7 +315,7 @@ func (rp *ResourceProcessor) ProcessNamespace(namespace string) error {
 	return nil
 }
 
-// Adding relationships
+// Update the ResourceProcessor struct methods
 
 func (rp *ResourceProcessor) ShowResourceRelationships(namespace string) error {
 	fmt.Println("External Traffic")
@@ -398,6 +406,21 @@ func (rp *ResourceProcessor) ShowResourceRelationships(namespace string) error {
 			rp.formatter.PrintInfo("", portInfo)
 		}
 
+		// Show endpoints if they exist
+		endpoints, err := rp.clientset.CoreV1().Endpoints(namespace).Get(rp.ctx, service.Name, metav1.GetOptions{})
+		if err == nil && len(endpoints.Subsets) > 0 {
+			rp.formatter.PrintInfo("", "Endpoints:")
+			for _, subset := range endpoints.Subsets {
+				for _, addr := range subset.Addresses {
+					target := ""
+					if addr.TargetRef != nil {
+						target = fmt.Sprintf(" (%s: %s)", addr.TargetRef.Kind, addr.TargetRef.Name)
+					}
+					rp.formatter.PrintInfo("", "  %s%s", addr.IP, target)
+				}
+			}
+		}
+
 		// Show selector and find matching pods
 		if len(service.Spec.Selector) > 0 {
 			rp.formatter.PrintInfo("", "Selector: %v", service.Spec.Selector)
@@ -417,10 +440,12 @@ func (rp *ResourceProcessor) ShowResourceRelationships(namespace string) error {
 				for _, pod := range pods.Items {
 					details := []string{
 						fmt.Sprintf("Status: %s", pod.Status.Phase),
-						fmt.Sprintf("Node: %s", pod.Spec.NodeName),
 					}
 					if pod.Status.PodIP != "" {
-						details = append(details, fmt.Sprintf("PodIP: %s", pod.Status.PodIP))
+						details = append(details, fmt.Sprintf("IP: %s", pod.Status.PodIP))
+					}
+					if pod.Spec.NodeName != "" {
+						details = append(details, fmt.Sprintf("Node: %s", pod.Spec.NodeName))
 					}
 					rp.formatter.PrintRelation("Pod", pod.Name, details...)
 				}
@@ -429,17 +454,39 @@ func (rp *ResourceProcessor) ShowResourceRelationships(namespace string) error {
 			}
 		}
 
-		// Show any associated endpoints
-		endpoints, err := rp.clientset.CoreV1().Endpoints(namespace).Get(rp.ctx, service.Name, metav1.GetOptions{})
-		if err == nil && len(endpoints.Subsets) > 0 {
-			rp.formatter.PrintInfo("", "Endpoints:")
-			for _, subset := range endpoints.Subsets {
-				for _, addr := range subset.Addresses {
-					target := ""
-					if addr.TargetRef != nil {
-						target = fmt.Sprintf(" (%s: %s)", addr.TargetRef.Kind, addr.TargetRef.Name)
+		// Show resource requirements if defined
+		if len(service.Spec.Selector) > 0 {
+			pods, err := rp.clientset.CoreV1().Pods(namespace).List(rp.ctx, metav1.ListOptions{
+				LabelSelector: metav1.FormatLabelSelector(&metav1.LabelSelector{
+					MatchLabels: service.Spec.Selector,
+				}),
+			})
+			if err == nil && len(pods.Items) > 0 {
+				var totalCPURequest, totalMemoryRequest int64
+				var totalCPULimit, totalMemoryLimit int64
+
+				for _, pod := range pods.Items {
+					for _, container := range pod.Spec.Containers {
+						if container.Resources.Requests != nil {
+							totalCPURequest += container.Resources.Requests.Cpu().MilliValue()
+							totalMemoryRequest += container.Resources.Requests.Memory().Value()
+						}
+						if container.Resources.Limits != nil {
+							totalCPULimit += container.Resources.Limits.Cpu().MilliValue()
+							totalMemoryLimit += container.Resources.Limits.Memory().Value()
+						}
 					}
-					rp.formatter.PrintInfo("", "  %s%s", addr.IP, target)
+				}
+
+				if totalCPURequest > 0 || totalMemoryRequest > 0 {
+					rp.formatter.PrintInfo("", "Total Resource Requests:")
+					rp.formatter.PrintInfo("", "  CPU: %dm", totalCPURequest)
+					rp.formatter.PrintInfo("", "  Memory: %dMi", totalMemoryRequest/(1024*1024))
+				}
+				if totalCPULimit > 0 || totalMemoryLimit > 0 {
+					rp.formatter.PrintInfo("", "Total Resource Limits:")
+					rp.formatter.PrintInfo("", "  CPU: %dm", totalCPULimit)
+					rp.formatter.PrintInfo("", "  Memory: %dMi", totalMemoryLimit/(1024*1024))
 				}
 			}
 		}
