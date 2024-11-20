@@ -99,6 +99,31 @@ func contains(slice []string, item string) bool {
 	return false
 }
 
+func printHelp() {
+	fmt.Println("Kubernetes MicroLens - A lightweight Kubernetes resource visualization tool")
+	fmt.Println("\nUsage:")
+	fmt.Println("  k8s-microlens [flags]")
+	fmt.Println("\nFlags:")
+	fmt.Println("  -n, --namespace string     Process only the specified namespace")
+	fmt.Println("  --exclude-ns string        Exclude specified namespaces (can be specified multiple times)")
+	fmt.Println("  -h, --help                Show help message")
+	fmt.Println("  -v, --version             Show version information")
+	fmt.Println("\nExamples:")
+	fmt.Println("  # Show resources in all namespaces")
+	fmt.Println("  k8s-microlens")
+	fmt.Println("\n  # Show resources in specific namespace")
+	fmt.Println("  k8s-microlens -n default")
+	fmt.Println("\n  # Exclude specific namespaces")
+	fmt.Println("  k8s-microlens --exclude-ns kube-system --exclude-ns kube-public")
+}
+
+func printVersion() {
+	fmt.Println("Kubernetes MicroLens v0.1.0")
+	fmt.Println("A lightweight Kubernetes resource visualization tool")
+	fmt.Println("\nAuthor: Marcus Bergo <marcus.bergo@gmail.com>")
+	fmt.Println("Repository: https://github.com/mbergo/k8s-microlens")
+}
+
 func main() {
 	var (
 		namespace = flag.String("n", "", "Process only the specified namespace")
@@ -149,29 +174,4 @@ func main() {
 	}
 
 	rm.formatter.PrintSuccess("Resource mapping complete!")
-}
-
-func printHelp() {
-	fmt.Println("Kubernetes MicroLens - A lightweight Kubernetes resource visualization tool")
-	fmt.Println("\nUsage:")
-	fmt.Println("  k8s-microlens [flags]")
-	fmt.Println("\nFlags:")
-	fmt.Println("  -n, --namespace string     Process only the specified namespace")
-	fmt.Println("  --exclude-ns string        Exclude specified namespaces (can be specified multiple times)")
-	fmt.Println("  -h, --help                Show this help message")
-	fmt.Println("  -v, --version             Show version information")
-	fmt.Println("\nExamples:")
-	fmt.Println("  # Show resources in all namespaces")
-	fmt.Println("  k8s-microlens")
-	fmt.Println("\n  # Show resources in specific namespace")
-	fmt.Println("  k8s-microlens -n default")
-	fmt.Println("\n  # Exclude specific namespaces")
-	fmt.Println("  k8s-microlens --exclude-ns kube-system --exclude-ns kube-public")
-}
-
-func printVersion() {
-	fmt.Println("Kubernetes MicroLens v0.1.0")
-	fmt.Println("A lightweight Kubernetes resource visualization tool")
-	fmt.Println("\nAuthor: Marcus Bergo <marcus.bergo@gmail.com>")
-	fmt.Println("Repository: https://github.com/mbergo/k8s-microlens")
 }
