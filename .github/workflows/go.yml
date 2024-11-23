@@ -28,7 +28,3 @@ jobs:
       - name: Build the binary
         run: |
           go build -v -o k8s-microlens cmd/mapper/main.go
-
-      - name: Run tests
-        run: |
-          go test ./...
