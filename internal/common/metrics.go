@@ -2,21 +2,18 @@ package common
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"math"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	metricsv1beta1 "k8s.io/metrics/pkg/apis/metrics/v1beta1"
 )
 
 type ResourceMetrics struct {
-	clientset *kubernetes.Clientset
+	clientset KubernetesClient
 	formatter *Formatter
 }
 
-func NewResourceMetrics(clientset *kubernetes.Clientset, formatter *Formatter) *ResourceMetrics {
+func NewResourceMetrics(clientset KubernetesClient, formatter *Formatter) *ResourceMetrics {
 	return &ResourceMetrics{
 		clientset: clientset,
 		formatter: formatter,
@@ -45,46 +42,21 @@ func (rm *ResourceMetrics) formatMemory(bytes int64) string {
 	return fmt.Sprintf("%.2f%s", value, sizes[int(i)])
 }
 
-// GetNodeMetrics fetches metrics for all nodes
-func (rm *ResourceMetrics) GetNodeMetrics() (*metricsv1beta1.NodeMetricsList, error) {
-	raw, err := rm.clientset.RESTClient().Get().
-		Resource("nodes").
-		SubResource("proxy").
-		Name("metrics").
-		DoRaw(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("error getting node metrics: %v", err)
-	}
-
-	metrics := &metricsv1beta1.NodeMetricsList{}
-	if err := json.Unmarshal(raw, metrics); err != nil {
-		return nil, fmt.Errorf("error parsing node metrics: %v", err)
-	}
-
-	return metrics, nil
-}
-
 // ShowNodeMetrics displays metrics for all nodes
 func (rm *ResourceMetrics) ShowNodeMetrics() error {
 	fmt.Println("\n[Node Metrics]")
 
-	metrics, err := rm.GetNodeMetrics()
+	nodes, err := rm.clientset.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
 	if err != nil {
-		return err
+		return fmt.Errorf("error getting nodes: %v", err)
 	}
 
-	for _, node := range metrics.Items {
+	for _, node := range nodes.Items {
 		rm.formatter.PrintResource("├──", "Node", node.Name)
 		rm.formatter.Indent()
 
-		nodeInfo, err := rm.clientset.CoreV1().Nodes().Get(context.Background(), node.Name, metav1.GetOptions{})
-		if err != nil {
-			rm.formatter.PrintInfo("", "Error getting node info: %v", err)
-			continue
-		}
-
-		capacity := nodeInfo.Status.Capacity
-		allocatable := nodeInfo.Status.Allocatable
+		capacity := node.Status.Capacity
+		allocatable := node.Status.Allocatable
 
 		rm.formatter.PrintInfo("", "Capacity:")
 		rm.formatter.PrintInfo("", "  CPU: %s", capacity.Cpu().String())
