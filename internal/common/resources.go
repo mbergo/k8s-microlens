@@ -7,17 +7,16 @@ import (
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 )
 
 type ResourceProcessor struct {
-	clientset *kubernetes.Clientset
+	clientset KubernetesClient
 	ctx       context.Context
 	formatter *Formatter
 	metrics   *ResourceMetrics
 }
 
-func NewResourceProcessor(clientset *kubernetes.Clientset, ctx context.Context) *ResourceProcessor {
+func NewResourceProcessor(clientset KubernetesClient, ctx context.Context) *ResourceProcessor {
 	formatter := NewFormatter()
 	return &ResourceProcessor{
 		clientset: clientset,
@@ -44,34 +43,49 @@ func (rp *ResourceProcessor) ShowDeploymentDetails(namespace string) error {
 		rp.formatter.PrintResource(prefix, "Deployment", deploy.Name)
 		rp.formatter.Indent()
 
-		rp.formatter.PrintInfo("", "Replicas: %d/%d", deploy.Status.AvailableReplicas, *deploy.Spec.Replicas)
+		// Handle nil replicas
+		var replicas int32 = 0
+		if deploy.Spec.Replicas != nil {
+			replicas = *deploy.Spec.Replicas
+		}
+
+		rp.formatter.PrintInfo("", "Replicas: %d/%d", deploy.Status.AvailableReplicas, replicas)
 		rp.formatter.PrintInfo("", "Strategy: %s", deploy.Spec.Strategy.Type)
 
 		if deploy.Spec.Strategy.RollingUpdate != nil {
-			rp.formatter.PrintInfo("", "Max Surge: %s", deploy.Spec.Strategy.RollingUpdate.MaxSurge.String())
-			rp.formatter.PrintInfo("", "Max Unavailable: %s", deploy.Spec.Strategy.RollingUpdate.MaxUnavailable.String())
+			if deploy.Spec.Strategy.RollingUpdate.MaxSurge != nil {
+				rp.formatter.PrintInfo("", "Max Surge: %s", deploy.Spec.Strategy.RollingUpdate.MaxSurge.String())
+			}
+			if deploy.Spec.Strategy.RollingUpdate.MaxUnavailable != nil {
+				rp.formatter.PrintInfo("", "Max Unavailable: %s", deploy.Spec.Strategy.RollingUpdate.MaxUnavailable.String())
+			}
 		}
 
 		// Show container details
 		for _, container := range deploy.Spec.Template.Spec.Containers {
 			rp.formatter.PrintInfo("", "Container: %s (Image: %s)", container.Name, container.Image)
-			if len(container.Ports) > 0 {
-				for _, port := range container.Ports {
-					rp.formatter.PrintInfo("", "  Port: %d/%s", port.ContainerPort, port.Protocol)
-				}
+			for _, port := range container.Ports {
+				rp.formatter.PrintInfo("", "  Port: %d/%s", port.ContainerPort, port.Protocol)
 			}
 
+			// Show resources if defined
 			if container.Resources.Limits != nil || container.Resources.Requests != nil {
 				rp.formatter.PrintInfo("", "  Resources:")
-				if container.Resources.Limits != nil {
-					cpu := container.Resources.Limits.Cpu()
-					memory := container.Resources.Limits.Memory()
-					rp.formatter.PrintInfo("", "    Limits: CPU: %v, Memory: %v", cpu, memory)
-				}
 				if container.Resources.Requests != nil {
-					cpu := container.Resources.Requests.Cpu()
-					memory := container.Resources.Requests.Memory()
-					rp.formatter.PrintInfo("", "    Requests: CPU: %v, Memory: %v", cpu, memory)
+					if cpu := container.Resources.Requests.Cpu(); cpu != nil {
+						rp.formatter.PrintInfo("", "    CPU Request: %s", cpu.String())
+					}
+					if memory := container.Resources.Requests.Memory(); memory != nil {
+						rp.formatter.PrintInfo("", "    Memory Request: %s", memory.String())
+					}
+				}
+				if container.Resources.Limits != nil {
+					if cpu := container.Resources.Limits.Cpu(); cpu != nil {
+						rp.formatter.PrintInfo("", "    CPU Limit: %s", cpu.String())
+					}
+					if memory := container.Resources.Limits.Memory(); memory != nil {
+						rp.formatter.PrintInfo("", "    Memory Limit: %s", memory.String())
+					}
 				}
 			}
 		}
