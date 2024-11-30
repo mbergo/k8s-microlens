@@ -206,7 +206,7 @@ If you find this project useful, please consider:
 
 ## Acknowledgments 🙏
 
-- The Kubernetes community
+- The [Kubernetes](https://github.com/kubernetes/kubernetes) community
 - Contributors to the project
 - Users who provide feedback and suggestions
 
