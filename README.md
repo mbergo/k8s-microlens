@@ -5,6 +5,7 @@ A lightweight, fast, and efficient Kubernetes resource visualization tool that p
 [![Go Report Card](https://goreportcard.com/badge/github.com/mbergo/k8s-microlens)](https://goreportcard.com/report/github.com/mbergo/k8s-microlens)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 ![Build Status](https://github.com/mbergo/k8s-microlens/actions/workflows/go.yml/badge.svg)
+[![CodeFactor](https://www.codefactor.io/repository/github/devhqcloud/k8d-scrapper/badge/main)](https://www.codefactor.io/repository/github/devhqcloud/k8d-scrapper/overview/main)
 
 
 ## Features ✨
